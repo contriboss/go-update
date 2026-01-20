@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/contriboss/go-update/compare/v1.0.0...v1.0.1) (2026-01-20)
+
+
+### Bug Fixes
+
+* replace external bzip2 with pure Go implementation and add CI tests ([55cae5a](https://github.com/contriboss/go-update/commit/55cae5a41a9db47659b52e22925acd388866d313))
+
 ## 1.0.0 (2026-01-20)
 
 
