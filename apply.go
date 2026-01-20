@@ -117,6 +117,16 @@ func Apply(update io.Reader, opts Options) error {
 		return err
 	}
 
+	// Ensure permissions are set correctly
+	if err = os.Chmod(newPath, opts.TargetMode); err != nil {
+		return err
+	}
+
+	// Sync to disk to prevent file loss on power failure
+	if err = fp.Sync(); err != nil {
+		return err
+	}
+
 	// if we don't call fp.Close(), windows won't let us move the new executable
 	// because the file will still be "in use"
 	fp.Close()
@@ -268,10 +278,14 @@ func (o *Options) SetPublicKeyPEM(pembytes []byte) error {
 
 func (o *Options) getPath() (string, error) {
 	if o.TargetPath == "" {
-		return osext.Executable()
-	} else {
-		return o.TargetPath, nil
+		exe, err := osext.Executable()
+		if err != nil {
+			return "", err
+		}
+		// Resolve symlinks to get the actual executable path
+		return filepath.EvalSymlinks(exe)
 	}
+	return o.TargetPath, nil
 }
 
 func (o *Options) applyPatch(patch io.Reader) ([]byte, error) {
