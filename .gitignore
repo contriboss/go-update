@@ -1,0 +1,4 @@
+# Generated test files
+internal/binarydist/test.old
+internal/binarydist/test.new
+internal/binarydist/test.patch
