@@ -10,8 +10,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-
-	"github.com/contriboss/go-update/internal/osext"
 )
 
 var (
@@ -361,7 +359,7 @@ func (o *Options) SetPublicKeyPEM(pembytes []byte) error {
 
 func (o *Options) getPath() (string, error) {
 	if o.TargetPath == "" {
-		exe, err := osext.Executable()
+		exe, err := os.Executable()
 		if err != nil {
 			return "", err
 		}
