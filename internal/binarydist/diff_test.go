@@ -27,7 +27,7 @@ func TestDiff(t *testing.T) {
 		if err != nil {
 			panic(err)
 		}
-		os.Remove(got.Name())
+		_ = os.Remove(got.Name())
 
 		exp, err := os.CreateTemp("/tmp", "bspatch.")
 		if err != nil {
@@ -37,7 +37,7 @@ func TestDiff(t *testing.T) {
 		cmd := exec.Command("bsdiff", s.old.Name(), s.new.Name(), exp.Name())
 		cmd.Stdout = os.Stdout
 		err = cmd.Run()
-		os.Remove(exp.Name())
+		_ = os.Remove(exp.Name())
 		if err != nil {
 			panic(err)
 		}

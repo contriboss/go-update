@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -21,8 +22,8 @@ var (
 )
 
 func cleanup(path string) {
-	os.Remove(path)
-	os.Remove(fmt.Sprintf(".%s.new", path))
+	_ = os.Remove(path)
+	_ = os.Remove(fmt.Sprintf(".%s.new", path))
 }
 
 // we write with a separate name for each test so that we can run them in parallel
@@ -384,7 +385,7 @@ func TestWriteError(t *testing.T) {
 		f, err := os.OpenFile(name, flags, perm)
 
 		// simulate Write() error by closing the file prematurely
-		f.Close()
+		_ = f.Close()
 
 		return f, err
 	}
@@ -395,5 +396,42 @@ func TestWriteError(t *testing.T) {
 	err := Apply(bytes.NewReader(newFile), Options{TargetPath: fName})
 	if err == nil {
 		t.Fatalf("Allowed an update to an empty file")
+	}
+}
+
+func TestApplyWithLock(t *testing.T) {
+	fName := "TestApplyWithLock"
+	defer cleanup(fName)
+	writeOldFile(fName, t)
+
+	err := Apply(bytes.NewReader(newFile), Options{
+		TargetPath: fName,
+		Lock:       true,
+	})
+	validateUpdate(fName, err, t)
+}
+
+func TestCheckPermissions(t *testing.T) {
+	fName := "TestCheckPermissions"
+	defer cleanup(fName)
+	writeOldFile(fName, t)
+
+	opts := Options{TargetPath: fName}
+	err := opts.CheckPermissions()
+	if err != nil {
+		t.Fatalf("CheckPermissions failed on valid file: %v", err)
+	}
+}
+
+func TestPermissionErrorType(t *testing.T) {
+	opts := Options{TargetPath: "/nonexistent/path/to/file"}
+	err := opts.CheckPermissions()
+	if err == nil {
+		t.Fatal("Expected error for nonexistent path")
+	}
+
+	var permErr *PermissionError
+	if !errors.As(err, &permErr) {
+		t.Fatalf("Expected PermissionError, got %T", err)
 	}
 }

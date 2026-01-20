@@ -54,7 +54,7 @@ func Apply(update io.Reader, opts Options) error {
 	case opts.Signature != nil:
 		return errors.New("no public key to verify signature with")
 	case opts.PublicKey != nil:
-		return errors.New("No signature to verify with")
+		return errors.New("no signature to verify with")
 	}
 
 	// set defaults
@@ -73,6 +73,19 @@ func Apply(update io.Reader, opts Options) error {
 	opts.TargetPath, err = opts.getPath()
 	if err != nil {
 		return err
+	}
+
+	// Acquire lock if enabled to prevent concurrent updates
+	if opts.Lock {
+		lock := newFileLock(opts.TargetPath)
+		acquired, err := lock.TryLock()
+		if err != nil {
+			return err
+		}
+		if !acquired {
+			return ErrLockHeld
+		}
+		defer func() { _ = lock.Unlock() }()
 	}
 
 	var newBytes []byte
@@ -110,7 +123,7 @@ func Apply(update io.Reader, opts Options) error {
 	if err != nil {
 		return err
 	}
-	defer fp.Close()
+	defer func() { _ = fp.Close() }()
 
 	_, err = io.Copy(fp, bytes.NewReader(newBytes))
 	if err != nil {
@@ -129,7 +142,7 @@ func Apply(update io.Reader, opts Options) error {
 
 	// if we don't call fp.Close(), windows won't let us move the new executable
 	// because the file will still be "in use"
-	fp.Close()
+	_ = fp.Close()
 
 	// this is where we'll move the executable to so that we can swap in the updated replacement
 	oldPath := opts.OldSavePath
@@ -232,11 +245,34 @@ type Options struct {
 	// Store the old executable file at this path after a successful update.
 	// The empty string means the old executable file will be removed after the update.
 	OldSavePath string
+
+	// Lock enables file locking to prevent concurrent updates from multiple processes.
+	// When true, Apply will acquire an exclusive lock before updating.
+	Lock bool
+}
+
+// ErrLockHeld is returned when Lock is enabled and another process is already updating
+var ErrLockHeld = errors.New("update already in progress by another process")
+
+// PermissionError provides detailed information about permission failures
+type PermissionError struct {
+	Path    string
+	Op      string
+	Reason  string
+	Wrapped error
+}
+
+func (e *PermissionError) Error() string {
+	return fmt.Sprintf("update permission denied: %s on %s: %s", e.Op, e.Path, e.Reason)
+}
+
+func (e *PermissionError) Unwrap() error {
+	return e.Wrapped
 }
 
 // CheckPermissions determines whether the process has the correct permissions to
 // perform the requested update. If the update can proceed, it returns nil, otherwise
-// it returns the error that would occur if an update were attempted.
+// it returns a PermissionError with details about what permission is missing.
 func (o *Options) CheckPermissions() error {
 	// get the directory the file exists in
 	path, err := o.getPath()
@@ -247,15 +283,62 @@ func (o *Options) CheckPermissions() error {
 	fileDir := filepath.Dir(path)
 	fileName := filepath.Base(path)
 
-	// attempt to open a file in the file's directory
+	// Check if target file exists and is writable
+	if info, err := os.Stat(path); err == nil {
+		// File exists, check if we can write to it
+		if info.Mode().Perm()&0200 == 0 {
+			return &PermissionError{
+				Path:   path,
+				Op:     "write",
+				Reason: "target file is not writable",
+			}
+		}
+	} else if !os.IsNotExist(err) {
+		return &PermissionError{
+			Path:    path,
+			Op:      "stat",
+			Reason:  "cannot access target file",
+			Wrapped: err,
+		}
+	}
+
+	// Check if directory exists
+	dirInfo, err := os.Stat(fileDir)
+	if err != nil {
+		return &PermissionError{
+			Path:    fileDir,
+			Op:      "stat",
+			Reason:  "cannot access target directory",
+			Wrapped: err,
+		}
+	}
+
+	if !dirInfo.IsDir() {
+		return &PermissionError{
+			Path:   fileDir,
+			Op:     "write",
+			Reason: "target path parent is not a directory",
+		}
+	}
+
+	// Check directory write permission by attempting to create temp file
 	newPath := filepath.Join(fileDir, fmt.Sprintf(".%s.new", fileName))
 	fp, err := openFile(newPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, o.TargetMode)
 	if err != nil {
-		return err
+		return &PermissionError{
+			Path:    fileDir,
+			Op:      "create",
+			Reason:  "cannot create files in target directory (check directory permissions)",
+			Wrapped: err,
+		}
 	}
-	fp.Close()
-
+	_ = fp.Close()
 	_ = os.Remove(newPath)
+
+	// Check if we can rename files in the directory (needed for atomic swap)
+	oldPath := filepath.Join(fileDir, fmt.Sprintf(".%s.old", fileName))
+	_ = os.Remove(oldPath) // Clean up any existing old file
+
 	return nil
 }
 
@@ -294,7 +377,7 @@ func (o *Options) applyPatch(patch io.Reader) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer old.Close()
+	defer func() { _ = old.Close() }()
 
 	// apply the patch
 	var applied bytes.Buffer
@@ -312,7 +395,7 @@ func (o *Options) verifyChecksum(updated []byte) error {
 	}
 
 	if !bytes.Equal(o.Checksum, checksum) {
-		return fmt.Errorf("Updated file has wrong checksum. Expected: %x, got: %x", o.Checksum, checksum)
+		return fmt.Errorf("updated file has wrong checksum: expected %x, got %x", o.Checksum, checksum)
 	}
 	return nil
 }

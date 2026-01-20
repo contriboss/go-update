@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+//go:build darwin || linux || freebsd || netbsd || windows
 // +build darwin linux freebsd netbsd windows
 
 package osext
@@ -119,8 +120,8 @@ func TestExecutableDelete(t *testing.T) {
 		t.Fatalf("rename copy to previous name failed: %v", err)
 	}
 
-	w.Write([]byte{0})
-	w.Close()
+	_, _ = w.Write([]byte{0})
+	_ = w.Close()
 
 	err = cmd.Wait()
 	if err != nil {
@@ -152,13 +153,13 @@ func copyFile(dest, src string) error {
 	if err != nil {
 		return err
 	}
-	defer df.Close()
+	defer func() { _ = df.Close() }()
 
 	sf, err := os.Open(src)
 	if err != nil {
 		return err
 	}
-	defer sf.Close()
+	defer func() { _ = sf.Close() }()
 
 	_, err = io.Copy(df, sf)
 	return err
@@ -175,7 +176,7 @@ func TestMain(m *testing.M) {
 		if runtime.GOOS == "windows" {
 			dir = filepath.VolumeName(".")
 		}
-		os.Chdir(dir)
+		_ = os.Chdir(dir)
 		if ep, err := Executable(); err != nil {
 			fmt.Fprint(os.Stderr, "ERROR: ", err)
 		} else {

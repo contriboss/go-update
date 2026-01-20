@@ -14,7 +14,7 @@ func TestPatch(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	os.Remove(got.Name())
+	_ = os.Remove(got.Name())
 
 	err = exec.Command("bsdiff", "test.old", "test.new", "test.patch").Run()
 	if err != nil {
@@ -42,7 +42,7 @@ func TestPatchHk(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	os.Remove(got.Name())
+	_ = os.Remove(got.Name())
 
 	err = Patch(mustOpen("testdata/sample.old"), got, mustOpen("testdata/sample.patch"))
 	if err != nil {

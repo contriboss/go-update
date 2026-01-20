@@ -171,10 +171,8 @@ func search(I []int, obuf, nbuf []byte, st, en int) (pos, n int) {
 	x := st + (en-st)/2
 	if bytes.Compare(obuf[I[x]:], nbuf) < 0 {
 		return search(I, obuf, nbuf, x, en)
-	} else {
-		return search(I, obuf, nbuf, st, x)
 	}
-	panic("unreached")
+	return search(I, obuf, nbuf, st, x)
 }
 
 // Diff computes the difference between old and new, according to the bsdiff
@@ -314,21 +312,21 @@ func diff(obuf, nbuf []byte, patch io.WriteSeeker) error {
 
 			err = binary.Write(pfbz2, signMagLittleEndian{}, int64(lenf))
 			if err != nil {
-				pfbz2.Close()
+				_ = pfbz2.Close()
 				return err
 			}
 
 			val := (scan - lenb) - (lastscan + lenf)
 			err = binary.Write(pfbz2, signMagLittleEndian{}, int64(val))
 			if err != nil {
-				pfbz2.Close()
+				_ = pfbz2.Close()
 				return err
 			}
 
 			val = (pos - lenb) - (lastpos + lenf)
 			err = binary.Write(pfbz2, signMagLittleEndian{}, int64(val))
 			if err != nil {
-				pfbz2.Close()
+				_ = pfbz2.Close()
 				return err
 			}
 
@@ -356,11 +354,11 @@ func diff(obuf, nbuf []byte, patch io.WriteSeeker) error {
 	}
 	n, err := pfbz2.Write(db[:dblen])
 	if err != nil {
-		pfbz2.Close()
+		_ = pfbz2.Close()
 		return err
 	}
 	if n != dblen {
-		pfbz2.Close()
+		_ = pfbz2.Close()
 		return io.ErrShortWrite
 	}
 	err = pfbz2.Close()
@@ -382,11 +380,11 @@ func diff(obuf, nbuf []byte, patch io.WriteSeeker) error {
 	}
 	n, err = pfbz2.Write(eb[:eblen])
 	if err != nil {
-		pfbz2.Close()
+		_ = pfbz2.Close()
 		return err
 	}
 	if n != eblen {
-		pfbz2.Close()
+		_ = pfbz2.Close()
 		return io.ErrShortWrite
 	}
 	err = pfbz2.Close()

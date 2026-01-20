@@ -2,7 +2,6 @@ package update
 
 import (
 	"crypto"
-	"crypto/dsa"
 	"crypto/ecdsa"
 	"crypto/rsa"
 	"encoding/asn1"
@@ -10,7 +9,7 @@ import (
 	"math/big"
 )
 
-// Verifier defines an interface for verfiying an update's signature with a public key.
+// Verifier defines an interface for verifying an update's signature with a public key.
 type Verifier interface {
 	VerifySignature(checksum, signature []byte, h crypto.Hash, publicKey crypto.PublicKey) error
 }
@@ -49,25 +48,7 @@ func NewECDSAVerifier() Verifier {
 			return err
 		}
 		if !ecdsa.Verify(key, checksum, rs.R, rs.S) {
-			return errors.New("failed to verify ecsda signature")
-		}
-		return nil
-	})
-}
-
-// NewDSAVerifier returns a Verifier that uses the DSA algorithm to verify updates.
-func NewDSAVerifier() Verifier {
-	return verifyFn(func(checksum, signature []byte, hash crypto.Hash, publicKey crypto.PublicKey) error {
-		key, ok := publicKey.(*dsa.PublicKey)
-		if !ok {
-			return errors.New("not a valid DSA public key")
-		}
-		var rs rsDER
-		if _, err := asn1.Unmarshal(signature, &rs); err != nil {
-			return err
-		}
-		if !dsa.Verify(key, checksum, rs.R, rs.S) {
-			return errors.New("failed to verify ecsda signature")
+			return errors.New("failed to verify ecdsa signature")
 		}
 		return nil
 	})
